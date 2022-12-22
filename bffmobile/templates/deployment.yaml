@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bffmobile.fullname" . }}
+  labels:
+    {{- include "bffmobile.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "bffmobile.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "bffmobile.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "bffmobile.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.image }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+          - containerPort: 4400
+            protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              value: "development"                    
+            - name: SERVICE_PORT
+              value: "4400"
+            - name: ELASTIC_APM_SERVER_URL
+              value: "http://apmserver-prd.default.svc.cluster.local:8200"
+            - name: ELASTIC_APM_SERVICE_NAME
+              value: "bff-mobile-prd"
+            - name: NEW_RELIC_APP_NAME
+              value: "bff-mobile-prd"
+            - name: NEW_RELIC_DISTRIBUTED_TRACING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_LOG
+              value: "stdout"
+            - name: NUMERO_THREADS
+              value: "1"
+            - name: NUMERO_TIMEOUT
+              value: "0"
+            - name: NUMERO_WORKER
+              value: "4"
+            - name: NEW_RELIC_LICENSE_KEY_ARN
+              valueFrom:
+                secretKeyRef:
+                  name: newrelic-apm
+                  key: NEW_RELIC_LICENSE_KEY_ARN
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: aws
+                  key: aws_region
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+          volumeMounts:
+          - name: data
+            mountPath: /app/logs
+          - name: tz-brazil-east
+            mountPath: /etc/localtime
+      volumes:
+      - name: data
+        hostPath:
+          path: /var/lib/filebeat-data
+      - name: tz-brazil-east
+        hostPath:
+          path: /usr/share/zoneinfo/Brazil/East
